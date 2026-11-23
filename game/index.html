@@ -3,17 +3,169 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<title>Vista Bay — Open World Crime Game</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23ffd24d'/%3E%3Ctext x='8' y='12' font-size='11' text-anchor='middle'%3EV%3C/text%3E%3C/svg%3E">
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c1218;
+    font-family: Arial, Helvetica, sans-serif; color: #fff; }
   #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hidden { display: none !important; }
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #top-left { position: absolute; top: 14px; left: 16px; }
+  #stars { font-size: 26px; letter-spacing: 4px; color: #5a6270; text-shadow: 0 2px 4px #000; }
+  #stars.hot { color: #ffd24d; }
+  #cash { font-size: 26px; font-weight: bold; color: #7dd87d; text-shadow: 0 2px 4px #000; margin-top: 2px; }
+  #clock { font-size: 15px; color: #dfe6ee; text-shadow: 0 1px 3px #000; margin-top: 2px; }
+  #top-right { position: absolute; top: 14px; right: 16px; text-align: right; }
+  #minimap { width: 200px; height: 200px; border-radius: 50%; border: 3px solid rgba(255,255,255,.75);
+    box-shadow: 0 2px 10px #000; background: #20262c; }
+  #objective { position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    background: rgba(10,16,22,.78); border: 1px solid rgba(255,210,77,.55); border-radius: 6px;
+    padding: 8px 16px; font-size: 16px; max-width: 60vw; text-align: center; }
+  #timer { position: absolute; top: 64px; left: 50%; transform: translateX(-50%);
+    background: rgba(10,16,22,.8); border-radius: 6px; padding: 6px 14px; font-size: 20px; font-weight: bold; }
+  #timer.urgent { color: #ff5a4d; border: 1px solid #ff5a4d; }
+  #bottom-left { position: absolute; left: 16px; bottom: 16px; width: 260px; }
+  #health-bar { height: 18px; background: rgba(0,0,0,.6); border: 1px solid #fff; border-radius: 4px; overflow: hidden; }
+  #health-fill { height: 100%; width: 100%; background: linear-gradient(90deg,#37b24d,#69db7c); }
+  #health-fill.low { background: linear-gradient(90deg,#c92a2a,#ff6b6b); }
+  #health-num { font-size: 13px; text-shadow: 0 1px 3px #000; }
+  #weapon-line { margin-top: 6px; font-size: 15px; text-shadow: 0 1px 3px #000; }
+  #ammo { font-weight: bold; color: #ffd24d; }
+  #bottom-right { position: absolute; right: 16px; bottom: 16px; text-align: right; }
+  #speed-box { font-size: 30px; font-weight: bold; text-shadow: 0 2px 4px #000; }
+  #speed { font-size: 30px; }
+  #subtitle { position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,.72); padding: 8px 18px; border-radius: 6px; font-size: 17px; max-width: 70vw; text-align: center; }
+  #toast { position: absolute; bottom: 170px; left: 50%; transform: translateX(-50%);
+    background: rgba(20,30,40,.85); border: 1px solid #7fd4ff; padding: 8px 16px; border-radius: 6px; font-size: 15px; }
+  #prompt { position: absolute; bottom: 220px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,.7); padding: 6px 14px; border-radius: 6px; font-size: 16px; color: #ffd24d; }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; }
+  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #fff; box-shadow: 0 0 3px #000; }
+  #crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+  #crosshair::after { left: 0; top: 10px; width: 22px; height: 2px; }
+  #save-note { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    color: #7dd87d; font-size: 14px; text-shadow: 0 1px 3px #000; }
+  #damage { position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(255,0,0,.55) 100%);
+    transition: opacity .25s; }
+  #muzzle { position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0; background: rgba(255,240,180,.28); }
+  #mission-complete { position: fixed; top: 34%; left: 50%; transform: translate(-50%,-50%); z-index: 8;
+    text-align: center; pointer-events: none; }
+  #mc-title { font-size: 44px; font-weight: bold; color: #ffd24d; text-shadow: 0 3px 8px #000; }
+  #mc-text { font-size: 20px; text-shadow: 0 2px 4px #000; margin-top: 8px; }
+  /* ---------- Menus ---------- */
+  .menu { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(160deg, rgba(8,20,34,.88), rgba(20,10,30,.82)); }
+  .menu-box { width: min(620px, 92vw); max-height: 92vh; overflow-y: auto; background: rgba(12,20,30,.92);
+    border: 2px solid #ffd24d; border-radius: 12px; padding: 28px 34px; text-align: center; }
+  .menu-box h1 { margin: 0; font-size: 52px; letter-spacing: 4px; color: #ffd24d; text-shadow: 0 3px 10px #000; }
+  .menu-box h2 { margin: 4px 0 18px; font-size: 17px; font-weight: normal; color: #9fd8ff; letter-spacing: 2px; }
+  .menu-box p { font-size: 15px; line-height: 1.55; color: #dfe6ee; }
+  .menu-box button { pointer-events: auto; display: block; width: 100%; margin: 8px 0; padding: 12px;
+    font-size: 17px; font-weight: bold; color: #10202e; background: #ffd24d; border: none; border-radius: 8px; cursor: pointer; }
+  .menu-box button:hover { background: #ffe27a; }
+  .menu-box button.secondary { background: #2a3a4a; color: #fff; }
+  .menu-box button.secondary:hover { background: #3a4a5c; }
+  .menu-box button:disabled { opacity: .45; cursor: default; }
+  .mission-btn { font-size: 14px !important; text-align: left; padding: 9px 12px !important; }
+  .mission-btn.done { background: #2a5a34 !important; color: #bff0c0 !important; }
+  .controls { font-size: 13px; color: #aebac6; text-align: left; margin-top: 14px; line-height: 1.7; }
+  .controls b { color: #ffd24d; }
+  /* ---------- Big map ---------- */
+  #bigmap { position: fixed; inset: 0; z-index: 9; background: rgba(0,0,0,.8);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #bigmap-canvas { border: 2px solid #ffd24d; border-radius: 8px; }
+  #bigmap h2 { color: #ffd24d; margin: 0 0 10px; }
+  #btn-close-map { margin-top: 12px; padding: 10px 26px; font-size: 16px; background: #ffd24d;
+    border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
 </style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.min.js" } }
+</script>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
+<canvas id="game" aria-label="Vista Bay: a 3D open-world crime game"></canvas>
+<div id="damage"></div>
+<div id="muzzle"></div>
+
+<div id="hud" class="hidden">
+  <div id="top-left">
+    <div id="stars">☆☆☆☆☆</div>
+    <div id="cash">$250</div>
+    <div id="clock">15:22</div>
+  </div>
+  <div id="top-right"><canvas id="minimap" width="200" height="200"></canvas></div>
+  <div id="objective" style="display:none"></div>
+  <div id="timer" style="display:none"></div>
+  <div id="bottom-left">
+    <div id="health-bar"><div id="health-fill"></div></div>
+    <div id="health-num">100</div>
+    <div id="weapon-line"><span id="weapon">FISTS</span> · <span id="ammo">—</span></div>
+  </div>
+  <div id="bottom-right"><div id="speed-box" style="display:none"><span id="speed"></span></div></div>
+  <div id="crosshair" style="display:none"></div>
+  <div id="subtitle" style="display:none"></div>
+  <div id="toast" style="display:none"></div>
+  <div id="prompt" style="display:none"></div>
+  <div id="save-note" style="display:none"></div>
+</div>
+<div id="mission-complete" class="hidden">
+  <div id="mc-title">MISSION COMPLETE</div>
+  <div id="mc-text"></div>
+</div>
+
+<div id="menu-start" class="menu">
+  <div class="menu-box">
+    <h1>VISTA BAY</h1>
+    <h2>AN OPEN-WORLD CRIME STORY</h2>
+    <p>Sun, sea and sin in Vista Bay. You are <b>Mara Voss</b>, new in town with $250 and
+      nothing to lose. Steal cars, outrun the Vista Bay police, take on nine story missions
+      for fixer <b>Dario Kane</b> — and stop <b>Rook</b> from owning the city.</p>
+    <button id="btn-play">▶ Start New Game</button>
+    <button id="btn-continue" class="secondary">↻ Continue Saved Game</button>
+    <button id="btn-mute" class="secondary">🔊 Sound: On</button>
+    <h3 style="color:#ffd24d;margin:16px 0 6px">STORY MISSIONS</h3>
+    <div id="mission-list"></div>
+    <div class="controls">
+      <b>WASD</b> move / drive &nbsp;·&nbsp; <b>Shift</b> run &nbsp;·&nbsp; <b>Mouse drag</b> look around<br>
+      <b>E</b> steal / enter / exit car &nbsp;·&nbsp; <b>Click</b> shoot / punch &nbsp;·&nbsp; <b>1 / 2</b> fists / pistol<br>
+      <b>R</b> reload &nbsp;·&nbsp; <b>F</b> punch &nbsp;·&nbsp; <b>M</b> big map &nbsp;·&nbsp; <b>Esc / P</b> pause<br>
+      Stealing, shooting and killing raise your wanted level. Hide from the police to cool off.
+      Get busted or wasted and you lose 20% of your cash at the hospital.
+    </div>
+  </div>
+</div>
+
+<div id="menu-pause" class="menu hidden">
+  <div class="menu-box">
+    <h1 style="font-size:38px">PAUSED</h1>
+    <p>Vista Bay waits for no one — except right now.</p>
+    <button id="btn-resume">▶ Resume</button>
+    <button id="btn-restart" class="secondary">↻ Restart Session</button>
+    <button id="btn-quit-menu" class="secondary">☰ Back to Main Menu</button>
+    <h3 style="color:#ffd24d;margin:16px 0 6px">STORY MISSIONS</h3>
+    <div id="mission-list-pause"></div>
+  </div>
+</div>
+
+<div id="menu-end" class="menu hidden">
+  <div class="menu-box">
+    <h1 id="end-title" style="font-size:44px;color:#ff6b6b">BUSTED</h1>
+    <p id="end-text"></p>
+    <button id="btn-end-retry">▶ Wake Up at the Hospital</button>
+    <button id="btn-end-menu" class="secondary">☰ Main Menu</button>
+  </div>
+</div>
+
+<div id="bigmap" class="hidden">
+  <h2>VISTA BAY — MAP (M to close)</h2>
+  <canvas id="bigmap-canvas" width="560" height="560"></canvas>
+  <button id="btn-close-map">Close Map</button>
+</div>
+
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
